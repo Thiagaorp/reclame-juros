@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Calculadora de Juros do Financiamento — Bônus do Guia Reclame dos Juros</title>
+<meta name="robots" content="noindex">
+<style>
+:root{--dark:#0B2E1F;--green:#14532D;--gold:#C9A84C;--light:#F3F6F4;--red:#922B21;--ok:#1E8449;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Segoe UI',Arial,sans-serif;background:var(--dark);color:#1C2833;line-height:1.5;min-height:100vh;padding:24px 14px;}
+.card{max-width:560px;margin:0 auto;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,.4);}
+.head{background:var(--dark);color:#fff;text-align:center;padding:22px 18px;border-bottom:4px solid var(--gold);}
+.head .tag{color:var(--gold);font-size:.75rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;}
+.head h1{font-size:1.35rem;margin-top:6px;}
+.body{padding:22px;}
+label{display:block;font-weight:700;font-size:.9rem;color:var(--dark);margin:14px 0 4px;}
+label small{font-weight:400;color:#666;}
+input{width:100%;padding:12px;font-size:1.05rem;border:2px solid #d5dbd7;border-radius:8px;}
+input:focus{outline:none;border-color:var(--gold);}
+button{width:100%;margin-top:20px;background:var(--gold);color:var(--dark);font-weight:800;font-size:1.1rem;padding:15px;border:none;border-radius:8px;cursor:pointer;}
+button:hover{filter:brightness(1.07);}
+.hint{background:var(--light);border-left:4px solid var(--gold);padding:10px 14px;font-size:.85rem;margin-top:16px;border-radius:0 8px 8px 0;}
+.hint a{color:var(--green);font-weight:700;}
+#res{display:none;margin-top:22px;}
+.verdict{text-align:center;padding:18px;border-radius:10px;color:#fff;font-weight:800;font-size:1.15rem;margin-bottom:14px;}
+.v-ok{background:var(--ok);}
+.v-warn{background:#B7791F;}
+.v-bad{background:var(--red);}
+table{width:100%;border-collapse:collapse;font-size:.95rem;}
+td{padding:9px 10px;border-bottom:1px solid #e7ebe8;}
+td:last-child{text-align:right;font-weight:700;color:var(--dark);}
+tr.hl td{background:#FEF9EC;}
+.note{font-size:.78rem;color:#777;margin-top:14px;}
+.foot{background:var(--light);text-align:center;padding:14px;font-size:.78rem;color:#666;}
+.foot a{color:var(--green);font-weight:700;}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="head">
+    <div class="tag">Bônus exclusivo do guia</div>
+    <h1>Calculadora de Juros do Financiamento</h1>
+  </div>
+  <div class="body">
+    <label>Valor financiado (R$) <small>— valor liberado/do bem, sem entrada</small></label>
+    <input type="number" id="pv" placeholder="Ex.: 45000" inputmode="decimal">
+    <label>Número de parcelas</label>
+    <input type="number" id="n" placeholder="Ex.: 48" inputmode="numeric">
+    <label>Valor da parcela (R$)</label>
+    <input type="number" id="pmt" placeholder="Ex.: 1450" inputmode="decimal">
+    <label>Taxa média do Banco Central (% ao mês) <small>— da modalidade, no mês da assinatura</small></label>
+    <input type="number" id="avg" placeholder="Ex.: 1.85" step="0.01" inputmode="decimal">
+    <div class="hint">Onde achar a média: pesquise "taxa média juros Banco Central" ou acesse <a href="https://www.bcb.gov.br/estatisticas/txjuros" target="_blank" rel="noopener">bcb.gov.br/estatisticas/txjuros</a>. O Capítulo 3 do guia mostra o passo a passo.</div>
+    <button onclick="calc()">CALCULAR MINHA TAXA REAL</button>
+
+    <div id="res">
+      <div class="verdict" id="verdict"></div>
+      <table>
+        <tr><td>Taxa real do seu contrato</td><td id="r_taxa"></td></tr>
+        <tr><td>Taxa equivalente ao ano</td><td id="r_ano"></td></tr>
+        <tr><td>Média do Bacen informada</td><td id="r_avg"></td></tr>
+        <tr class="hl"><td>Sua taxa está</td><td id="r_ratio"></td></tr>
+        <tr><td>Total que você pagará</td><td id="r_total"></td></tr>
+        <tr><td>Total de juros no contrato</td><td id="r_juros"></td></tr>
+        <tr><td>Parcela se fosse na taxa média</td><td id="r_pmtavg"></td></tr>
+        <tr class="hl"><td>Diferença total vs. média</td><td id="r_econ"></td></tr>
+      </table>
+      <p class="note">Cálculo pela Tabela Price sobre os valores informados. A taxa real encontrada embute tarifas e seguros financiados — por isso pode ser maior que a taxa "de contrato": essa diferença é exatamente o custo escondido que o guia ensina a contestar. Ferramenta educativa; não constitui laudo ou parecer.</p>
+    </div>
+  </div>
+  <div class="foot">Bônus do <a href="https://thiagaorp.github.io/reclame-juros/" target="_blank" rel="noopener">Guia Reclame dos Juros do Seu Financiamento</a> — Edição 2026</div>
+</div>
+<script>
+function money(v){return v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});}
+function pct(v){return v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) + '%';}
+function rateFromPmt(pv, n, pmt){
+  // resolve PV = PMT * (1-(1+i)^-n)/i  por bisseção
+  if (pmt * n <= pv) return 0;
+  var lo = 1e-7, hi = 0.5;
+  for (var k = 0; k < 200; k++) {
+    var mid = (lo + hi) / 2;
+    var calcPv = pmt * (1 - Math.pow(1 + mid, -n)) / mid;
+    if (calcPv > pv) lo = mid; else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+function calc(){
+  var pv = parseFloat(document.getElementById('pv').value);
+  var n = parseInt(document.getElementById('n').value, 10);
+  var pmt = parseFloat(document.getElementById('pmt').value);
+  var avg = parseFloat(document.getElementById('avg').value);
+  if (!(pv > 0) || !(n > 0) || !(pmt > 0)) { alert('Preencha valor financiado, parcelas e valor da parcela.'); return; }
+  var i = rateFromPmt(pv, n, pmt);
+  var im = i * 100;
+  var ia = (Math.pow(1 + i, 12) - 1) * 100;
+  var total = pmt * n;
+  var juros = total - pv;
+  document.getElementById('r_taxa').textContent = pct(im) + ' a.m.';
+  document.getElementById('r_ano').textContent = pct(ia) + ' a.a.';
+  document.getElementById('r_total').textContent = money(total);
+  document.getElementById('r_juros').textContent = money(juros);
+  var v = document.getElementById('verdict');
+  if (avg > 0) {
+    var ratio = im / avg;
+    document.getElementById('r_avg').textContent = pct(avg) + ' a.m.';
+    document.getElementById('r_ratio').textContent = ratio.toLocaleString('pt-BR',{maximumFractionDigits:2}) + 'x a média';
+    var ia2 = avg / 100;
+    var pmtAvg = pv * ia2 / (1 - Math.pow(1 + ia2, -n));
+    document.getElementById('r_pmtavg').textContent = money(pmtAvg);
+    document.getElementById('r_econ').textContent = money((pmt - pmtAvg) * n);
+    if (ratio < 1.5) { v.className = 'verdict v-ok'; v.textContent = 'Dentro da faixa usual do mercado'; }
+    else if (ratio < 2) { v.className = 'verdict v-warn'; v.textContent = 'Acima da média — vale reclamar e renegociar'; }
+    else { v.className = 'verdict v-bad'; v.textContent = 'Muito acima da média — indício de abusividade'; }
+  } else {
+    document.getElementById('r_avg').textContent = '—';
+    document.getElementById('r_ratio').textContent = '—';
+    document.getElementById('r_pmtavg').textContent = '—';
+    document.getElementById('r_econ').textContent = '—';
+    v.className = 'verdict v-warn'; v.textContent = 'Informe a média do Bacen para o veredito completo';
+  }
+  document.getElementById('res').style.display = 'block';
+}
+</script>
+</body>
+</html>
